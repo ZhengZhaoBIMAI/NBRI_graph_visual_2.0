@@ -1,0 +1,450 @@
+:root {
+  --flag-blue: #0038b8;
+  --flag-ink: #052665;
+  --sky-blue: #dceaff;
+  --paper: #f8fbff;
+  --white: #ffffff;
+  --research-blue: #285bac;
+  --secondary-blue: #0b55c8;
+  --secondary-red: #c9424d;
+  --secondary-brown: #d98a1b;
+  --cooperate: #087f8c;
+  --work: #6a7c9a;
+  --text: #071a3b;
+  --muted: #49617f;
+  --line-soft: rgba(0, 56, 184, 0.2);
+  --shadow: 0 20px 56px rgba(5, 38, 101, 0.16);
+}
+
+html,
+body {
+  width: 100%;
+  min-height: 100%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  overflow: hidden;
+  color: var(--text);
+  background:
+    linear-gradient(135deg, rgba(0, 56, 184, 0.09), transparent 34%),
+    linear-gradient(180deg, #ffffff 0%, #eef5ff 100%);
+  font-family:
+    Inter, "Segoe UI", Arial, sans-serif;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+.graph-shell {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  min-height: 680px;
+}
+
+.masthead {
+  position: absolute;
+  top: clamp(20px, 4vh, 42px);
+  left: clamp(20px, 4vw, 56px);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.masthead p,
+.node-info p {
+  margin: 0;
+  letter-spacing: 0;
+}
+
+.masthead p {
+  color: var(--flag-blue);
+  font-size: 1.34rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.masthead h1 {
+  margin: 8px 0 0;
+  font-size: 1.2rem;
+  font-weight: 760;
+  line-height: 0.98;
+  letter-spacing: 0;
+}
+
+.graph-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+#graph {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.node-info {
+  position: absolute;
+  z-index: 2;
+  border: 1px solid rgba(0, 56, 184, 0.16);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(14px);
+}
+
+.node-info {
+  right: clamp(20px, 4vw, 56px);
+  bottom: clamp(20px, 4vh, 42px);
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  width: min(360px, calc(100vw - 40px));
+  padding: 18px 22px;
+  border-radius: 8px;
+}
+
+.node-info-label {
+  color: var(--flag-blue);
+  font-size: 0.76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.node-info h2 {
+  margin: 0;
+  font-size: 1.36rem;
+  line-height: 1.14;
+  letter-spacing: 0;
+  grid-row: 1;
+}
+
+.node-info dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.node-info dl:empty {
+  display: none;
+}
+
+.node-info div {
+  display: grid;
+  gap: 4px;
+}
+
+.node-info dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.node-info dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 0.96rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.node-info a {
+  color: var(--flag-blue);
+  text-underline-offset: 3px;
+}
+
+.graph-link {
+  vector-effect: non-scaling-stroke;
+  transition:
+    stroke 260ms ease,
+    stroke-opacity 260ms ease,
+    stroke-width 260ms ease,
+    opacity 260ms ease;
+}
+
+.graph-link.affiliate {
+  stroke: var(--flag-blue);
+}
+
+.graph-link.cooperate {
+  stroke: var(--cooperate);
+}
+
+.edge-label {
+  dominant-baseline: middle;
+  font-size: 10.5px;
+  font-weight: 780;
+  paint-order: stroke;
+  pointer-events: none;
+  stroke: rgba(255, 255, 255, 0.98);
+  stroke-linejoin: round;
+  stroke-width: 4.5px;
+  text-anchor: middle;
+  transition: opacity 240ms ease;
+}
+
+.edge-label.affiliate {
+  fill: var(--flag-blue);
+}
+
+.edge-label.cooperate {
+  fill: var(--cooperate);
+}
+
+.node {
+  cursor: default;
+  outline: none;
+  transition: opacity 260ms ease;
+}
+
+.node.researcher {
+  cursor: pointer;
+}
+
+.node.detail-node {
+  cursor: grab;
+}
+
+.node.dragging {
+  cursor: grabbing;
+}
+
+.node circle {
+  filter: drop-shadow(0 12px 18px rgba(5, 38, 101, 0.16));
+  stroke-width: 2px;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition:
+    fill 260ms ease,
+    stroke 260ms ease,
+    stroke-width 260ms ease,
+    filter 260ms ease,
+    transform 180ms ease,
+    opacity 260ms ease;
+}
+
+.node .person-icon,
+.node .lab-icon,
+.node .workplace-icon,
+.node .university-icon {
+  filter: drop-shadow(0 10px 14px rgba(5, 38, 101, 0.18));
+  transform-box: fill-box;
+  transform-origin: center;
+  transition:
+    filter 260ms ease,
+    transform 180ms ease,
+    opacity 260ms ease;
+}
+
+.node.detail-node:hover circle,
+.node.detail-node:focus-visible circle,
+.node.detail-node:hover .person-icon,
+.node.detail-node:focus-visible .person-icon,
+.node.detail-node:hover .lab-icon,
+.node.detail-node:focus-visible .lab-icon,
+.node.detail-node:hover .workplace-icon,
+.node.detail-node:focus-visible .workplace-icon,
+.node.detail-node:hover .university-icon,
+.node.detail-node:focus-visible .university-icon {
+  filter: drop-shadow(0 16px 22px rgba(5, 38, 101, 0.26));
+  transform: scale(1.12);
+}
+
+.node text {
+  fill: currentColor;
+  font-weight: 850;
+  letter-spacing: 0;
+  pointer-events: none;
+  text-anchor: middle;
+  user-select: none;
+}
+
+.node .node-role {
+  fill: currentColor;
+  font-size: 12px;
+  font-weight: 900;
+  opacity: 0.74;
+  text-transform: none;
+}
+
+.node .node-type {
+  fill: var(--muted);
+  font-size: 10px;
+  font-weight: 760;
+}
+
+.node.root {
+  color: var(--white);
+  cursor: grab;
+}
+
+.node.root circle {
+  fill: var(--flag-ink);
+  stroke: var(--flag-blue);
+}
+
+.node.root text {
+  dominant-baseline: central;
+}
+
+.node.researcher circle {
+  fill: var(--research-blue);
+  stroke: var(--flag-blue);
+  stroke-width: 2px;
+}
+
+.node.researcher {
+  color: var(--white);
+}
+
+.node.researcher text {
+  font-weight: 700;
+}
+
+.node.researcher .node-role {
+  font-weight: 600;
+}
+
+.node.hub {
+  color: var(--flag-ink);
+}
+
+.node.hub circle {
+  fill: var(--white);
+  stroke: var(--flag-blue);
+}
+
+.node.partner,
+.node.workplace {
+  color: var(--flag-ink);
+}
+
+.node.partner circle,
+.node.workplace circle {
+  fill: var(--secondary-brown);
+  stroke: none;
+  stroke-width: 0;
+}
+
+.node.partner text,
+.node.lab text,
+.node.preview text,
+.node.member text,
+.node.collaborator text,
+.node.academic-collaborator text,
+.node.workplace text,
+.node.university text {
+  fill: var(--flag-ink);
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.96);
+  stroke-linejoin: round;
+  stroke-width: 4px;
+}
+
+.node.lab {
+  color: var(--flag-ink);
+}
+
+.node.preview {
+  color: var(--flag-ink);
+}
+
+.node.lab circle {
+  fill: #cde3ff;
+  stroke: rgba(0, 56, 184, 0.22);
+  stroke-width: 0.7px;
+}
+
+.node.member {
+  color: var(--flag-ink);
+}
+
+.node.member circle {
+  fill: var(--secondary-red);
+  stroke: none;
+  stroke-width: 0;
+}
+
+.node.collaborator {
+  color: var(--flag-ink);
+}
+
+.node.collaborator circle {
+  fill: var(--secondary-red);
+  stroke: none;
+  stroke-width: 0;
+}
+
+.node.academic-collaborator,
+.node.university {
+  color: var(--flag-ink);
+}
+
+.node.active circle {
+  filter: drop-shadow(0 18px 24px rgba(0, 56, 184, 0.32));
+  stroke-width: 2.8px;
+}
+
+.node.active .person-icon {
+  filter: drop-shadow(0 18px 24px rgba(0, 56, 184, 0.32));
+}
+
+.node.active .workplace-icon {
+  filter: drop-shadow(0 18px 24px rgba(0, 56, 184, 0.32));
+}
+
+.node.active .university-icon {
+  filter: drop-shadow(0 18px 24px rgba(0, 56, 184, 0.32));
+}
+
+.node.partner.active circle,
+.node.member.active circle,
+.node.collaborator.active circle,
+.node.academic-collaborator.active circle,
+.node.workplace.active circle,
+.node.university.active circle {
+  stroke: none;
+  stroke-width: 0;
+}
+
+.node.dimmed {
+  opacity: 0.34;
+}
+
+.node:focus-visible circle {
+  stroke: #00b3c6;
+  stroke-width: 6px;
+}
+
+.node:focus-visible .person-icon {
+  filter:
+    drop-shadow(0 0 1px #00b3c6)
+    drop-shadow(0 0 8px rgba(0, 179, 198, 0.68));
+}
+
+.node:focus-visible .workplace-icon {
+  filter:
+    drop-shadow(0 0 1px #00b3c6)
+    drop-shadow(0 0 8px rgba(0, 179, 198, 0.68));
+}
+
+.node:focus-visible .university-icon {
+  filter:
+    drop-shadow(0 0 1px #00b3c6)
+    drop-shadow(0 0 8px rgba(0, 179, 198, 0.68));
+}

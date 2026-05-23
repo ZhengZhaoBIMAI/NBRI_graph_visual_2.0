@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="stylesheet" href="./styles.css" />
+    <title>NBRI Research Ecosystem</title>
+  </head>
+  <body>
+    <main class="graph-shell">
+      <header class="masthead">
+        <p>National Building Research Institute</p>
+        <h1>Research Ecosystem</h1>
+      </header>
+
+      <section class="graph-stage" aria-label="NBRI organization graph">
+        <svg id="graph" role="img" aria-labelledby="graph-title graph-desc">
+          <title id="graph-title">NBRI research center organization graph</title>
+          <desc id="graph-desc">
+            Force-directed overview of NBRI researchers, collaborators, labs,
+            lab members, and partner institutions.
+          </desc>
+        </svg>
+
+        <aside
+          class="node-info"
+          aria-live="polite"
+          aria-label="Selected node information"
+        >
+          <h2 id="info-name">National Building Research Institute</h2>
+          <dl id="info-fields"></dl>
+        </aside>
+      </section>
+    </main>
+
+    <script src="./graph-data.js"></script>
+    <script src="./graph.js"></script>
+  </body>
+</html>
