@@ -7,6 +7,8 @@ const expandedLabDistance = 280;
 const collaborationBranchDefaultDistance = 260;
 const collaborationBranchDefaultSpread = 168;
 const institutionBranchExtraDistance = 72;
+const edgeLabelDistance = 12;
+const edgeLabelTextClearance = 8;
 
 const nodes = window.nbriGraphData.nodes.map((node) => ({
   ...node,
@@ -797,13 +799,13 @@ function resolveDetailLayout(activeId, visibleNodes) {
   const activeDetailIds = new Set(activeDetails.map((node) => node.id));
   const occupied = visibleNodes
     .filter((node) => !node.detail || node.owner !== activeId)
-    .map((node) => worldLayoutBox(node, { x: node.x, y: node.y }));
+    .map((node) => layoutOccupancy(node, { x: node.x, y: node.y }));
   const occupiedLinks = layoutLinkSegments(activeId, activeDetailIds);
   activeDetails
     .filter((node) => manualDetailPositions.has(node.id))
     .forEach((node) => {
       const position = manualDetailPositions.get(node.id);
-      occupied.push(worldLayoutBox(node, position));
+      occupied.push(layoutOccupancy(node, position));
       const incoming = incomingLayoutSegment(node, position, activeId);
       if (incoming) {
         occupiedLinks.push(incoming);
@@ -817,7 +819,7 @@ function resolveDetailLayout(activeId, visibleNodes) {
     }
 
     if (node === draggingNode) {
-      occupied.push(worldLayoutBox(node, { x: node.x, y: node.y }));
+      occupied.push(layoutOccupancy(node, { x: node.x, y: node.y }));
       return;
     }
 
@@ -839,7 +841,7 @@ function resolveDetailLayout(activeId, visibleNodes) {
     node.y = position.y;
     node.vx = 0;
     node.vy = 0;
-    occupied.push(worldLayoutBox(node, position));
+    occupied.push(layoutOccupancy(node, position));
     const incoming = incomingLayoutSegment(node, position, activeId);
     if (incoming) {
       occupiedLinks.push(incoming);
@@ -943,7 +945,7 @@ function safeDetailDragPosition(node, desired, activeId, visibleNodes) {
   const candidate = fitNodeInsideGraph(node, desired);
   const occupied = visibleNodes
     .filter((other) => other.id !== node.id)
-    .map((other) => worldLayoutBox(other, { x: other.x, y: other.y }));
+    .map((other) => layoutOccupancy(other, { x: other.x, y: other.y }));
   const occupiedLinks = layoutLinkSegments(activeId);
   const box = worldLayoutBox(node, candidate);
   const collides =
@@ -958,6 +960,7 @@ function detailPositionIsClear(node, position, box, occupied, occupiedLinks) {
   return (
     !occupied.some((other) => boxesOverlap(box, other, 14)) &&
     !incomingEdgeLabelCollides(node, position, occupied) &&
+    !nodeTextTouchesExistingEdgeLabels(node, position, occupiedLinks) &&
     !boxTouchesLinks(node, box, occupiedLinks) &&
     !incomingLinkCollides(node, position, occupied, occupiedLinks)
   );
@@ -975,12 +978,33 @@ function incomingEdgeLabelCollides(node, position, occupied) {
   const original = { x: link.targetNode.x, y: link.targetNode.y };
   link.targetNode.x = position.x;
   link.targetNode.y = position.y;
-  const labelPoint = placeEdgeLabel(link, occupied);
+  const labelPoint = edgeLabelPoint(link);
   const labelBox = edgeLabelBox(link, labelPoint);
+  const targetTextBox = worldTextBox(node, position);
   link.targetNode.x = original.x;
   link.targetNode.y = original.y;
 
-  return occupied.some((other) => boxesOverlap(labelBox, other, 10));
+  if (boxesOverlap(labelBox, targetTextBox, edgeLabelTextClearance)) {
+    return true;
+  }
+
+  return occupied.some((other) =>
+    boxesOverlap(labelBox, other.textBox || other, edgeLabelTextClearance),
+  );
+}
+
+function nodeTextTouchesExistingEdgeLabels(node, position, occupiedLinks) {
+  const textBox = worldTextBox(node, position);
+
+  return occupiedLinks.some((segment) => {
+    if (!segment.link?.label || segmentsShareNode(segment, { source: node.id, target: node.id })) {
+      return false;
+    }
+
+    const labelPoint = edgeLabelPoint(segment.link);
+    const labelBox = edgeLabelBox(segment.link, labelPoint);
+    return boxesOverlap(textBox, labelBox, edgeLabelTextClearance);
+  });
 }
 
 function searchOpenCanvasPosition(node, anchor, occupied, occupiedLinks) {
@@ -1010,6 +1034,7 @@ function layoutLinkSegments(activeId, ignoredTargets = new Set()) {
   return links
     .filter((link) => linkOpacity(link, activeId) > 0.03 && !ignoredTargets.has(link.target))
     .map((link) => ({
+      link,
       source: link.source,
       target: link.target,
       x1: link.sourceNode.x,
@@ -1030,6 +1055,7 @@ function incomingLayoutSegment(node, position, activeId) {
   }
 
   return {
+    link,
     source: link.source,
     target: node.id,
     x1: link.sourceNode.x,
@@ -1097,6 +1123,29 @@ function worldLayoutBox(node, position) {
     y: position.y + box.y,
     width: box.width,
     height: box.height,
+  };
+}
+
+function layoutOccupancy(node, position) {
+  return {
+    ...worldLayoutBox(node, position),
+    textBox: worldTextBox(node, position),
+  };
+}
+
+function worldTextBox(node, position) {
+  const textBox = safeTextBox(node);
+
+  if (!textBox) {
+    return worldLayoutBox(node, position);
+  }
+
+  return {
+    id: node.id,
+    x: position.x + textBox.x,
+    y: position.y + textBox.y,
+    width: textBox.width,
+    height: textBox.height,
   };
 }
 
@@ -1403,9 +1452,10 @@ function render() {
     link.element.setAttribute("stroke-opacity", opacity);
     link.element.setAttribute("stroke-width", linkWidth(link, activeId));
     const labelOpacity = edgeLabelOpacity(link, activeId, opacity);
-    const labelPoint = placeEdgeLabel(link, edgeLabelOccupied);
+    const labelPoint = edgeLabelPoint(link);
     link.labelElement.setAttribute("x", labelPoint.x);
     link.labelElement.setAttribute("y", labelPoint.y);
+    link.labelElement.setAttribute("transform", `rotate(${labelPoint.angle} ${labelPoint.x} ${labelPoint.y})`);
     link.labelElement.setAttribute("opacity", labelOpacity);
 
     if (labelOpacity > 0) {
@@ -1431,52 +1481,24 @@ function render() {
   });
 }
 
-function placeEdgeLabel(link, occupied) {
-  const candidates = edgeLabelCandidates(link);
-
-  return candidates.reduce(
-    (best, candidate) => {
-      const box = edgeLabelBox(link, candidate);
-      const collisions = occupied.filter((other) => boxesOverlap(box, other, 10));
-      const score =
-        collisions.length * 1000 +
-        collisions.reduce((total, other) => total + boxOverlapArea(box, other), 0) +
-        Math.abs(candidate.progress - 0.52) * 90 +
-        Math.abs(candidate.offsetScale - 1) * 18;
-
-      return score < best.score ? { point: candidate, score } : best;
-    },
-    { point: candidates[0], score: Number.POSITIVE_INFINITY },
-  ).point;
-}
-
-function edgeLabelCandidates(link) {
-  const progressValues = link.detail
-    ? [0.5, 0.38, 0.62, 0.28, 0.72, 0.82, 0.18]
-    : [0.56, 0.44, 0.68, 0.32, 0.78];
-  const offsetValues = [1, -1, 1.55, -1.55, 2.15, -2.15, 2.8, -2.8, 3.5, -3.5];
-
-  return progressValues.flatMap((progress) =>
-    offsetValues.map((offsetScale) => edgeLabelPoint(link, progress, offsetScale)),
-  );
-}
-
-function edgeLabelPoint(link, progress = 0.52, offsetScale = 1) {
+function edgeLabelPoint(link) {
   const source = link.sourceNode;
   const target = link.targetNode;
   const dx = target.x - source.x;
   const dy = target.y - source.y;
   const length = Math.hypot(dx, dy) || 1;
-  const labelProgress = link.source === "nbri" ? Math.max(progress, 0.58) : progress;
+  const labelProgress = link.source === "nbri" ? 0.58 : 0.52;
   const normalX = -dy / length;
   const normalY = dx / length;
-  const offset = labelSide(link) * offsetScale * (link.detail ? 11 : 13);
+  const offset = labelSide(link) * edgeLabelDistance;
+  const angle = readableEdgeAngle(Math.atan2(dy, dx) * 180 / Math.PI);
 
   return {
     x: source.x + dx * labelProgress + normalX * offset,
     y: source.y + dy * labelProgress + normalY * offset,
+    angle,
     progress: labelProgress,
-    offsetScale,
+    offsetScale: labelSide(link),
   };
 }
 
@@ -1492,18 +1514,43 @@ function edgeLabelBox(link, point) {
     // Use the text-length estimate until the SVG label has measurable bounds.
   }
 
-  return {
-    x: point.x - bounds.width / 2,
-    y: point.y - bounds.height / 2,
-    width: bounds.width,
-    height: bounds.height,
-  };
+  return rotatedBoxBounds(point.x, point.y, bounds.width, bounds.height, point.angle);
 }
 
-function boxOverlapArea(first, second) {
-  const width = Math.min(first.x + first.width, second.x + second.width) - Math.max(first.x, second.x);
-  const height = Math.min(first.y + first.height, second.y + second.height) - Math.max(first.y, second.y);
-  return Math.max(width, 0) * Math.max(height, 0);
+function readableEdgeAngle(angle) {
+  if (angle > 90 || angle < -90) {
+    return angle + 180;
+  }
+
+  return angle;
+}
+
+function rotatedBoxBounds(centerX, centerY, width, height, angle) {
+  const radians = (angle * Math.PI) / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  const halfWidth = width / 2;
+  const halfHeight = height / 2;
+  const corners = [
+    { x: -halfWidth, y: -halfHeight },
+    { x: halfWidth, y: -halfHeight },
+    { x: halfWidth, y: halfHeight },
+    { x: -halfWidth, y: halfHeight },
+  ].map((corner) => ({
+    x: centerX + corner.x * cos - corner.y * sin,
+    y: centerY + corner.x * sin + corner.y * cos,
+  }));
+  const xs = corners.map((corner) => corner.x);
+  const ys = corners.map((corner) => corner.y);
+  const left = Math.min(...xs);
+  const top = Math.min(...ys);
+
+  return {
+    x: left,
+    y: top,
+    width: Math.max(...xs) - left,
+    height: Math.max(...ys) - top,
+  };
 }
 
 function labelSide(link) {
