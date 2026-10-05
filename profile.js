@@ -125,7 +125,7 @@ window.renderNbriProfile = function (node, graphNodes = window.nbriGraphData.nod
   }
   if (template.labHead) {
     const head = graphNodes.find(candidate => candidate.id === node.owner && candidate.kind === "researcher");
-    field("Principal Investigator", head ? displayName(head) : "Researcher Name (Placeholder)");
+    field("Principal Investigator", head ? head.label.replaceAll("\n", " ") : "Researcher Name (Placeholder)");
   }
   if (template.affiliationKind) {
     const affiliationLink = window.nbriGraphData.links.find(link => link.source === node.id &&
