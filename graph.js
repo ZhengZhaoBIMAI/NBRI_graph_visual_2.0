@@ -689,6 +689,7 @@ function selectProfileNode(node) {
 function updateInfoCard() {
   const node = nodeById.get(pinnedInfoNode || pinnedResearcher || "nbri");
   window.renderNbriProfile(node, nodes, selectProfileNode);
+  updateSearchPanelHeight();
 }
 
 function resetProfile({ restoreOverview = false } = {}) {
@@ -727,6 +728,9 @@ document.querySelector("#close-profile").addEventListener("click", () => {
   previousNode?.element.focus({ preventScroll: true });
 });
 
+const searchPanel = document.querySelector(".research-search");
+const searchContent = document.querySelector("#search-content");
+const profileCard = document.querySelector(".node-info");
 const searchInput = document.querySelector("#research-search");
 const searchResults = document.querySelector("#search-results");
 const searchStatus = document.querySelector("#search-status");
@@ -742,6 +746,29 @@ const normalizeSearch = value => value.normalize("NFD").replace(/[\u0300-\u036f]
 const researchDomains = node => Array.isArray(node.info?.researchDomains)
   ? node.info.researchDomains.filter(domain => typeof domain === "string" && domain.trim()).map(domain => domain.trim()) : [];
 const domains = [...new Set(researchers.flatMap(researchDomains))].sort();
+
+function updateSearchPanelHeight() {
+  const search = searchPanel.getBoundingClientRect();
+  const profile = profileCard.getBoundingClientRect();
+  const gap = 20;
+  const visualViewport = window.visualViewport;
+  let bottom = Math.min(document.documentElement.clientHeight,
+    visualViewport ? visualViewport.offsetTop + visualViewport.height : window.innerHeight) - gap;
+  if (profile.width && profile.height && profile.left < search.right && profile.right > search.left) {
+    bottom = Math.min(bottom, profile.top - gap);
+  }
+  // Only constrain the panel; hovering cards must not reframe the graph.
+  const maxHeight = Math.max(0, Math.floor(bottom - search.top)) + "px";
+  if (searchPanel.style.getPropertyValue("--search-max-height") !== maxHeight) {
+    searchPanel.style.setProperty("--search-max-height", maxHeight);
+  }
+}
+const panelResizeObserver = new ResizeObserver(updateSearchPanelHeight);
+panelResizeObserver.observe(profileCard, { box: "border-box" });
+panelResizeObserver.observe(graphViewport);
+window.visualViewport?.addEventListener("resize", updateSearchPanelHeight);
+window.visualViewport?.addEventListener("scroll", updateSearchPanelHeight);
+updateSearchPanelHeight();
 
 function setDomainFilterOpen(open) {
   domainFilterToggle.setAttribute("aria-expanded", String(open));
@@ -780,13 +807,16 @@ function updateSearch() {
   matchingResearcherIds = new Set(matches.map(node => node.id));
   if (pinnedResearcher && !matchingResearcherIds.has(pinnedResearcher)) resetProfile();
   const active = Boolean(query || selectedDomains.size);
-  document.querySelector("#clear-filters").hidden = !active;
+  document.querySelector("#clear-filters").hidden = !selectedDomains.size;
   domainFilterCount.hidden = !selectedDomains.size;
   domainFilterCount.textContent = String(selectedDomains.size);
   domainFilterToggle.setAttribute("aria-label", "Filter by Research Domain" +
     (selectedDomains.size ? ", " + selectedDomains.size + " selected" : ""));
-  searchStatus.textContent = matches.length ? "" : "No matches. Try another name or clear filters.";
+  searchStatus.textContent = matches.length ? "" : selectedDomains.size
+    ? "No researchers found. Try another name or clear the domain filters."
+    : "No researchers found. Try another name.";
   searchStatus.hidden = Boolean(matches.length);
+  document.querySelector(".results-heading > span").hidden = !matches.length;
   searchBody.hidden = !searchIsOpen || !active;
 
   searchResults.replaceChildren();
@@ -794,7 +824,18 @@ function updateSearch() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "search-result";
-    button.textContent = node.label.replaceAll("\n", " ");
+    const name = document.createElement("span");
+    name.textContent = node.label.replaceAll("\n", " ");
+    const arrow = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    arrow.setAttribute("viewBox", "0 0 24 24");
+    arrow.setAttribute("fill", "none");
+    arrow.setAttribute("stroke", "currentColor");
+    arrow.setAttribute("stroke-width", "1.8");
+    arrow.setAttribute("aria-hidden", "true");
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", "M5 12h14m-6-6 6 6-6 6");
+    arrow.append(path);
+    button.append(name, arrow);
     button.addEventListener("click", () => {
       searchInput.focus();
       searchIsOpen = false;
@@ -805,10 +846,14 @@ function updateSearch() {
     searchResults.append(button);
   });
 }
-searchInput.addEventListener("input", () => { searchIsOpen = true; updateSearch(); });
+searchInput.addEventListener("input", () => {
+  setDomainFilterOpen(false);
+  searchContent.scrollTop = 0;
+  searchIsOpen = true;
+  updateSearch();
+});
 searchInput.addEventListener("focus", () => { searchIsOpen = true; updateSearch(); });
 document.querySelector("#clear-filters").addEventListener("click", () => {
-  searchInput.value = "";
   selectedDomains.clear();
   domainOptions.querySelectorAll("input").forEach(input => { input.checked = false; });
   domainOptions.querySelectorAll(".domain-option").forEach(option => { option.hidden = false; });
