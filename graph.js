@@ -1,6 +1,5 @@
 const svg = document.querySelector("#graph");
-const infoName = document.querySelector("#info-name");
-const infoFields = document.querySelector("#info-fields");
+const graphViewport = document.querySelector("#graph-viewport");
 const svgNamespace = "http://www.w3.org/2000/svg";
 const assetBase = window.nbriGraphBase || "./";
 const expandedLabDistance = 280;
@@ -33,9 +32,17 @@ links.forEach((link) => {
 
 let width = 0;
 let height = 0;
-let hoveredResearcher = null;
-const lockedHoverLabPositions = new Map();
-let hoveredNode = null;
+let graphZoom = 1;
+let viewportReady = false;
+let cameraX = 0;
+let cameraY = 0;
+let viewportWidth = 1;
+let viewportHeight = 1;
+const activePointers = new Map();
+let pinchGesture = null;
+let dragStartScreen = null;
+let backgroundPan = null;
+let suppressBackgroundClick = false;
 let pinnedInfoNode = null;
 const requestedFocus = new URLSearchParams(window.location.search).get("focus");
 let pinnedResearcher = researcherIds.has(requestedFocus) ? requestedFocus : null;
@@ -72,6 +79,11 @@ nodes.forEach((node) => {
   node.shape = createNodeShape(node);
   node.text = makeSvg("text");
   writeNodeText(node);
+  // The institute and researchers use their original visible circle as the target.
+  if (node.kind !== "root" && node.kind !== "researcher") {
+    node.hitArea = makeSvg("rect", { class: "node-hit-area", rx: 10, "aria-hidden": "true" });
+    node.element.append(node.hitArea);
+  }
   node.element.append(node.shape, node.text);
   layers.nodes.append(node.element);
   bindInfoEvents(node);
@@ -82,19 +94,87 @@ nodes.forEach((node) => {
 
 });
 
-svg.addEventListener("pointermove", (event) => {
+svg.addEventListener("pointermove", event => {
+  if (activePointers.has(event.pointerId)) activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+  if (pinchGesture && activePointers.size >= 2) {
+    const [a, b] = [...activePointers.values()];
+    const distance = Math.hypot(a.x - b.x, a.y - b.y);
+    const bounds = svg.getBoundingClientRect();
+    zoomAt(pinchGesture.zoom * distance / pinchGesture.distance, {
+      x: (a.x + b.x) / 2 - bounds.left,
+      y: (a.y + b.y) / 2 - bounds.top,
+    }, pinchGesture.anchor);
+    return;
+  }
+  if (backgroundPan) {
+    const dx = event.clientX - backgroundPan.x;
+    const dy = event.clientY - backgroundPan.y;
+    if (Math.hypot(dx, dy) > 4) suppressBackgroundClick = true;
+    cameraX = backgroundPan.cameraX - dx / graphZoom;
+    cameraY = backgroundPan.cameraY - dy / graphZoom;
+    updateCamera();
+    return;
+  }
   if (draggingNode) {
+    if (dragStartScreen && Math.hypot(event.clientX - dragStartScreen.x, event.clientY - dragStartScreen.y) > 4) suppressBackgroundClick = true;
     dragPointer = svgPoint(event);
   }
 });
 
+svg.addEventListener("pointerdown", event => {
+  if (event.pointerType === "mouse" && event.button !== 0) return;
+  if (!activePointers.size) suppressBackgroundClick = false;
+  activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+  if (activePointers.size >= 2) {
+    const [a, b] = [...activePointers.values()];
+    pinchGesture = {
+      distance: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+      zoom: graphZoom,
+      anchor: svgPoint({ clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 }),
+    };
+    backgroundPan = null;
+    draggingNode?.element.classList.remove("dragging");
+    draggingNode = null;
+    suppressBackgroundClick = true;
+    svg.setPointerCapture(event.pointerId);
+    return;
+  }
+  if (event.target !== svg) return;
+  backgroundPan = { x: event.clientX, y: event.clientY, cameraX, cameraY };
+  svg.setPointerCapture(event.pointerId);
+  graphViewport.classList.add("panning");
+});
+function releasePan(event) {
+  activePointers.delete(event.pointerId);
+  pinchGesture = null;
+  backgroundPan = null;
+  if (activePointers.size === 1) {
+    const point = [...activePointers.values()][0];
+    backgroundPan = { ...point, cameraX, cameraY };
+  } else {
+    graphViewport.classList.remove("panning");
+  }
+}
+svg.addEventListener("pointerup", releasePan);
+svg.addEventListener("pointercancel", releasePan);
+// A drag or pinch must never trigger a node click or reset the selection.
+svg.addEventListener("click", event => {
+  if (suppressBackgroundClick) {
+    suppressBackgroundClick = false;
+    event.stopImmediatePropagation();
+    event.preventDefault();
+  }
+}, true);
+
 svg.addEventListener("pointerup", releaseDrag);
 svg.addEventListener("pointercancel", releaseDrag);
 svg.addEventListener("click", (event) => {
+  if (suppressBackgroundClick) {
+    suppressBackgroundClick = false;
+    return;
+  }
   if (event.target === svg) {
-    setPinnedResearcher(null);
-    pinnedInfoNode = null;
-    updateInfoCard();
+    resetProfile({ restoreOverview: Boolean(pinnedResearcher) });
   }
 });
 
@@ -105,6 +185,7 @@ nodes.forEach((node) => {
     }
 
     draggingNode = node;
+    dragStartScreen = { x: event.clientX, y: event.clientY };
     dragPointer = svgPoint(event);
     dragOffset = {
       x: node.x - dragPointer.x,
@@ -114,7 +195,6 @@ nodes.forEach((node) => {
     if (node.kind === "root") {
       userRootOverride = true;
       manualDetailPositions.clear();
-      lockedHoverLabPositions.clear();
     }
 
     node.element.classList.add("dragging");
@@ -123,9 +203,9 @@ nodes.forEach((node) => {
 });
 
 const resizeObserver = new ResizeObserver(resize);
-resizeObserver.observe(svg);
+resizeObserver.observe(graphViewport);
 resize();
-requestAnimationFrame(startGraph);
+document.fonts.ready.then(startGraph);
 
 function makeSvg(tag, attributes = {}) {
   const element = document.createElementNS(svgNamespace, tag);
@@ -237,10 +317,26 @@ function detailOuterNodeType(kind) {
   }[kind];
 }
 
+function wrapNodeLabel(label) {
+  // Treat manual line breaks as word boundaries; never split a name inside a word.
+  const words = label.replaceAll("\\n", " ").trim().split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = "";
+  words.forEach(word => {
+    if (line && line.length + word.length + 1 > 22) {
+      lines.push(line);
+      line = "";
+    }
+    line += (line ? " " : "") + word;
+  });
+  if (line) lines.push(line);
+  return lines;
+}
+
 function writeNodeText(node) {
   const nodeType = detailOuterNodeType(node.kind);
   const isExternalLabel = Boolean(nodeType) || node.kind === "partner";
-  const lines = isExternalLabel ? [node.label.replaceAll("\n", " ")] : node.label.split("\n");
+  const lines = isExternalLabel ? wrapNodeLabel(node.label) : node.label.split("\n");
   const labelY = externalLabelY(node);
   const fontSize =
     node.kind === "root"
@@ -277,13 +373,14 @@ function writeNodeText(node) {
     node.text.append(tspan);
   });
 
-  if (nodeType) {
+  const nodeCaption = ["workplace", "lab", "preview"].includes(node.kind) ? "" : nodeType;
+  if (nodeCaption) {
     const type = makeSvg("tspan", {
       x: "0",
       dy: "1.36em",
       class: "node-type",
     });
-    type.textContent = nodeType;
+    type.textContent = nodeCaption;
     node.text.append(type);
   }
 
@@ -304,67 +401,42 @@ function externalLabelY(node) {
 }
 
 function bindInfoEvents(node) {
-  node.element.addEventListener("pointerenter", () => {
-    hoveredNode = node.id;
-    updateInfoCard();
-  });
-  node.element.addEventListener("pointerleave", () => {
-    hoveredNode = null;
-    updateInfoCard();
-  });
-  node.element.addEventListener("click", () => {
+  node.element.addEventListener("pointerenter", event => {
+    if (event.pointerType === "touch" || event.buttons || draggingNode || backgroundPan || pinchGesture) return;
+    if (node.element.getAttribute("aria-hidden") === "true" || pinnedInfoNode === node.id) return;
+    // Hover changes only the card. Retain it on leave so its links remain usable.
     pinnedInfoNode = node.id;
     updateInfoCard();
   });
-  node.element.addEventListener("focus", () => {
-    hoveredNode = node.id;
-    updateInfoCard();
-  });
-  node.element.addEventListener("blur", () => {
-    hoveredNode = null;
-    updateInfoCard();
+  node.element.addEventListener("click", () => {
+    if (node.kind === "researcher") return;
+    if (node.kind === "root") resetProfile();
+    else {
+      pinnedInfoNode = node.id;
+      updateInfoCard();
+    }
   });
 }
 
 function bindResearcherEvents(element, researcherId) {
-  element.addEventListener("pointerenter", () => {
-    hoveredResearcher = researcherId;
-    lockHoveredLabPosition(researcherId);
-  });
-  element.addEventListener("pointerleave", () => {
-    hoveredResearcher = null;
-    lockedHoverLabPositions.delete(researcherId);
-  });
-  element.addEventListener("click", (event) => {
+  element.addEventListener("click", event => {
     event.stopPropagation();
-    setPinnedResearcher(pinnedResearcher === researcherId ? null : researcherId);
+    if (pinnedResearcher === researcherId) resetProfile();
+    else selectProfileNode(nodeById.get(researcherId));
   });
-  element.addEventListener("keydown", (event) => {
-    if (event.key !== "Enter" && event.key !== " ") {
-      return;
-    }
-
+  element.addEventListener("keydown", event => {
+    if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
-    setPinnedResearcher(pinnedResearcher === researcherId ? null : researcherId);
+    if (pinnedResearcher === researcherId) resetProfile();
+    else selectProfileNode(nodeById.get(researcherId));
   });
 }
 
 function setPinnedResearcher(researcherId) {
   pinnedResearcher = researcherId;
-  userRootOverride = false;
+  // Preserve the canvas unless the caller explicitly restores the overview.
+  userRootOverride = !researcherId;
   manualDetailPositions.clear();
-  lockedHoverLabPositions.clear();
-}
-
-function lockHoveredLabPosition(researcherId) {
-  nodes
-    .filter((node) => node.kind === "lab" && node.owner === researcherId)
-    .forEach((node) => {
-      const anchor = hoverPreviewAllowsOverflow(researcherId)
-        ? anchorFor(node, researcherId)
-        : clampDetailAnchor(anchorFor(node, researcherId), node);
-      lockedHoverLabPositions.set(node.id, anchor);
-    });
 }
 
 function releaseDrag() {
@@ -385,20 +457,120 @@ function releaseDrag() {
 }
 
 function resize() {
-  const bounds = svg.getBoundingClientRect();
-  width = bounds.width;
-  height = bounds.height;
-  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  const bounds = graphViewport.getBoundingClientRect();
+  if (viewportReady && bounds.width === viewportWidth && bounds.height === viewportHeight) return;
+  const oldCenter = { x: cameraX + viewportWidth / (2 * graphZoom), y: cameraY + viewportHeight / (2 * graphZoom) };
+  viewportWidth = Math.max(1, bounds.width);
+  viewportHeight = Math.max(1, bounds.height);
+  const oldWidth = width;
+  const oldHeight = height;
+  width = Math.max(1400, viewportWidth);
+  height = Math.max(1050, viewportHeight);
   const center = nodeById.get("nbri");
-  const nextCenter = rootPositionReady
-    ? fitNodeInsideGraph(center, { x: center.x, y: center.y })
-    : { x: width * 0.48, y: height * 0.51 };
-  center.x = nextCenter.x;
-  center.y = nextCenter.y;
-  center.vx = 0;
-  center.vy = 0;
-  rootPositionReady = true;
+  if (!rootPositionReady) {
+    center.x = width * 0.48;
+    center.y = height * 0.51;
+    rootPositionReady = true;
+  } else if (width !== oldWidth || height !== oldHeight) {
+    manualDetailPositions.clear();
+  }
+  applyGraphZoom(graphZoom, viewportReady ? oldCenter : center);
+  viewportReady = true;
 }
+
+function updateCamera() {
+  svg.setAttribute("viewBox", cameraX + " " + cameraY + " " + viewportWidth / graphZoom + " " + viewportHeight / graphZoom);
+  graphViewport.style.backgroundSize = (24 * graphZoom) + "px " + (24 * graphZoom) + "px";
+  graphViewport.style.backgroundPosition = (-cameraX * graphZoom) + "px " + (-cameraY * graphZoom) + "px";
+  document.querySelector("#zoom-level").textContent = Math.round(graphZoom * 100) + "%";
+  document.querySelector("#zoom-out").disabled = graphZoom <= 0.2;
+  document.querySelector("#zoom-in").disabled = graphZoom >= 2.5;
+}
+function applyGraphZoom(zoom, center) {
+  const anchor = center || {
+    x: cameraX + viewportWidth / (2 * graphZoom),
+    y: cameraY + viewportHeight / (2 * graphZoom),
+  };
+  graphZoom = clamp(zoom, 0.2, 2.5);
+  cameraX = anchor.x - viewportWidth / (2 * graphZoom);
+  cameraY = anchor.y - viewportHeight / (2 * graphZoom);
+  updateCamera();
+}
+function zoomAt(zoom, screenPoint, anchor) {
+  const world = anchor || { x: cameraX + screenPoint.x / graphZoom, y: cameraY + screenPoint.y / graphZoom };
+  graphZoom = clamp(zoom, 0.2, 2.5);
+  cameraX = world.x - screenPoint.x / graphZoom;
+  cameraY = world.y - screenPoint.y / graphZoom;
+  updateCamera();
+}
+
+function unobscuredFrame() {
+  const viewport = graphViewport.getBoundingClientRect();
+  const search = document.querySelector(".research-search").getBoundingClientRect();
+  const profile = document.querySelector(".node-info").getBoundingClientRect();
+  const heading = document.querySelector(".masthead").getBoundingClientRect();
+  if (viewportWidth > 900) {
+    const top = heading.bottom - viewport.top + 24;
+    return {
+      x: 24,
+      y: top,
+      width: Math.max(360, Math.min(search.left, profile.left) - viewport.left - 48),
+      height: Math.max(240, viewportHeight - top - 70),
+    };
+  }
+  const top = search.bottom - viewport.top + 16;
+  return {
+    x: 16,
+    y: top,
+    width: viewportWidth - 32,
+    height: Math.max(120, profile.top - viewport.top - top - 16),
+  };
+}
+
+function frameGraph(readable = false, { includeFiltered = false } = {}) {
+  const activeId = activeResearcher();
+  const opacityForFrame = includeFiltered ? baseNodeOpacity : nodeOpacity;
+  const relevant = nodes.filter(node => opacityForFrame(node, activeId) > 0.12 &&
+    (!activeId || nodeInFocusSubtree(node, activeId)));
+  if (!relevant.length) return;
+  const bounds = relevant.map(node => worldLayoutBox(node, node)).reduce(unionBox);
+  const frame = unobscuredFrame();
+  const scale = Math.min(frame.width / (bounds.width + 64), frame.height / (bounds.height + 64), 1);
+  const focus = readable && scale < 0.85 && pinnedResearcher ? nodeById.get(pinnedResearcher) : null;
+  zoomAt(readable ? Math.max(0.85, scale) : scale, {
+    x: frame.x + frame.width / 2,
+    y: frame.y + frame.height / 2,
+  }, focus || {
+    x: bounds.x + bounds.width / 2,
+    y: bounds.y + bounds.height / 2,
+  });
+}
+
+document.querySelector("#zoom-in").addEventListener("click", () => { applyGraphZoom(graphZoom + 0.15); });
+document.querySelector("#zoom-out").addEventListener("click", () => { applyGraphZoom(graphZoom - 0.15); });
+document.querySelector("#fit-graph").addEventListener("click", () => { frameGraph(); });
+document.querySelector("#actual-size").addEventListener("click", () => { applyGraphZoom(1); });
+graphViewport.addEventListener("wheel", event => {
+  event.preventDefault();
+  const bounds = svg.getBoundingClientRect();
+  const units = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? viewportHeight : 1;
+  zoomAt(graphZoom * Math.exp(-event.deltaY * units * 0.0015), { x: event.clientX - bounds.left, y: event.clientY - bounds.top });
+}, { passive: false });
+graphViewport.addEventListener("keydown", event => {
+  if (event.target !== graphViewport) return;
+  if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+    event.preventDefault();
+    cameraX += (event.key === "ArrowLeft" ? -60 : event.key === "ArrowRight" ? 60 : 0) / graphZoom;
+    cameraY += (event.key === "ArrowUp" ? -60 : event.key === "ArrowDown" ? 60 : 0) / graphZoom;
+    updateCamera();
+  } else if (["+", "=", "-"].includes(event.key)) {
+    event.preventDefault();
+    applyGraphZoom(graphZoom + (event.key === "-" ? -0.15 : 0.15));
+  } else if (event.key === "Home") {
+    event.preventDefault();
+    frameGraph();
+  }
+});
 
 function seedPositions() {
   nodes.forEach((node, index) => {
@@ -416,17 +588,31 @@ function seedPositions() {
 
 function startGraph() {
   resize();
+  nodes.forEach(updateNodeHitArea);
   seedPositions();
   updateInfoCard();
+  settleLayout();
+  frameGraph(Boolean(pinnedResearcher));
+  render();
+  // Flush the final hidden state so no opacity transition reveals seed positions.
+  svg.getBoundingClientRect();
+  svg.classList.add("is-ready");
+  svg.setAttribute("aria-busy", "false");
+  lastFrame = performance.now();
   requestAnimationFrame(tick);
 }
 
-function activeResearcher() {
-  return pinnedResearcher || hoveredResearcher;
+function settleLayout() {
+  // Run the initial force relaxation before presenting or framing a new branch.
+  for (let step = 0; step < 180; step += 1) simulate(1);
 }
 
-function hoverPreviewAllowsOverflow(activeId) {
-  return Boolean(activeId && activeId === hoveredResearcher && activeId !== pinnedResearcher);
+function activeResearcher() {
+  return pinnedResearcher;
+}
+
+function hoverPreviewAllowsOverflow() {
+  return false;
 }
 
 function updateRootPosition(delta) {
@@ -491,38 +677,160 @@ function rootTargetForResearcher(researcherId) {
   });
 }
 
+function selectProfileNode(node) {
+  setPinnedResearcher(node.kind === "researcher" ? node.id : node.owner || null);
+  pinnedInfoNode = node.id;
+  updateInfoCard();
+  settleLayout();
+  render();
+  frameGraph(Boolean(pinnedResearcher));
+}
+
 function updateInfoCard() {
-  const node = nodeById.get(hoveredNode || pinnedInfoNode || "nbri");
-  const info = node.info || {};
-  const fields = [
-    ["Hebrew Name", info.hebrewName],
-    ["Affiliation", info.affiliation],
-    ["Website", info.website],
-  ].filter(([, value]) => value);
+  const node = nodeById.get(pinnedInfoNode || pinnedResearcher || "nbri");
+  window.renderNbriProfile(node, nodes, selectProfileNode);
+}
 
-  infoName.textContent = info.name || node.label.replaceAll("\n", " ");
-  infoFields.replaceChildren();
+function resetProfile({ restoreOverview = false } = {}) {
+  setPinnedResearcher(null);
+  pinnedInfoNode = null;
+  updateInfoCard();
+  if (restoreOverview) {
+    // Rebuild the default overview before the next paint, including its camera.
+    // Disable fading so expanded details cannot linger at their previous positions.
+    svg.classList.add("is-resetting");
+    searchIsOpen = false;
+    searchBody.hidden = true;
+    userRootOverride = false;
+    Object.assign(nodeById.get("nbri"), defaultRootTarget());
+    nodes.forEach(node => { node.vx = 0; node.vy = 0; });
+    seedPositions();
+    settleLayout();
+    // Search still dims non-matches, but the camera returns to the full overview.
+    frameGraph(false, { includeFiltered: true });
+  } else {
+    // Position the returning overview labels before they become visible.
+    simulate(1);
+  }
+  render();
+  if (restoreOverview) {
+    svg.getBoundingClientRect();
+    svg.classList.remove("is-resetting");
+    lastFrame = performance.now();
+  }
+}
 
-  fields.forEach(([label, value]) => {
-    const row = document.createElement("div");
-    const term = document.createElement("dt");
-    const description = document.createElement("dd");
-    term.textContent = label;
+document.querySelector("#close-profile").addEventListener("click", () => {
+  const previousNode = nodeById.get(pinnedResearcher || pinnedInfoNode);
+  resetProfile();
+  previousNode?.element.focus({ preventScroll: true });
+});
 
-    if (label === "Website") {
-      const link = document.createElement("a");
-      link.href = value;
-      link.target = "_blank";
-      link.rel = "noreferrer";
-      link.textContent = value;
-      description.append(link);
-    } else {
-      description.textContent = value;
-    }
-
-    row.append(term, description);
-    infoFields.append(row);
+const searchInput = document.querySelector("#research-search");
+const searchResults = document.querySelector("#search-results");
+const searchStatus = document.querySelector("#search-status");
+const searchBody = document.querySelector("#search-body");
+const domainOptions = document.querySelector("#domain-options");
+const selectedDomains = new Set();
+const researchers = nodes.filter(node => node.kind === "researcher");
+let matchingResearcherIds = new Set(researchers.map(node => node.id));
+let searchIsOpen = false;
+const normalizeSearch = value => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const researchDomains = node => Array.isArray(node.info?.researchDomains)
+  ? node.info.researchDomains.filter(domain => typeof domain === "string" && domain.trim()).map(domain => domain.trim()) : [];
+const domains = [...new Set(researchers.flatMap(researchDomains))].sort();
+domains.forEach(domain => {
+  const label = document.createElement("label");
+  label.className = "domain-option";
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.value = domain;
+  checkbox.addEventListener("change", () => {
+    if (checkbox.checked) selectedDomains.add(domain);
+    else selectedDomains.delete(domain);
+    searchIsOpen = true;
+    updateSearch();
   });
+  const name = document.createElement("span");
+  name.textContent = domain;
+  label.append(checkbox, name);
+  domainOptions.append(label);
+});
+
+function updateSearch() {
+  const query = normalizeSearch(searchInput.value.trim());
+  const matches = researchers.filter(node => {
+    const name = [node.label, node.info?.name].join(" ").replaceAll("\n", " ");
+    return (!query || normalizeSearch(name).includes(query)) &&
+      (!selectedDomains.size || researchDomains(node).some(domain => selectedDomains.has(domain)));
+  });
+  matchingResearcherIds = new Set(matches.map(node => node.id));
+  if (pinnedResearcher && !matchingResearcherIds.has(pinnedResearcher)) resetProfile();
+  const active = Boolean(query || selectedDomains.size);
+  document.querySelector("#clear-filters").hidden = !active;
+  searchStatus.textContent = matches.length ? "" : "No matches. Try another name or clear filters.";
+  searchStatus.hidden = Boolean(matches.length);
+  searchBody.hidden = !searchIsOpen || !active;
+
+  searchResults.replaceChildren();
+  (active ? matches : []).forEach(node => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "search-result";
+    button.textContent = node.label.replaceAll("\n", " ");
+    button.addEventListener("click", () => {
+      searchInput.focus();
+      searchIsOpen = false;
+      searchBody.hidden = true;
+      selectProfileNode(node);
+    });
+    searchResults.append(button);
+  });
+}
+searchInput.addEventListener("input", () => { searchIsOpen = true; updateSearch(); });
+searchInput.addEventListener("focus", () => { searchIsOpen = true; updateSearch(); });
+document.querySelector("#clear-filters").addEventListener("click", () => {
+  searchInput.value = "";
+  selectedDomains.clear();
+  domainOptions.querySelectorAll("input").forEach(input => { input.checked = false; });
+  domainOptions.querySelectorAll(".domain-option").forEach(option => { option.hidden = false; });
+  searchIsOpen = true;
+  updateSearch();
+  searchInput.focus();
+});
+searchInput.addEventListener("keydown", event => {
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    searchResults.querySelector("button")?.focus();
+  }
+  if (event.key === "Enter") searchResults.querySelector("button")?.click();
+});
+searchResults.addEventListener("keydown", event => {
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    const next = event.key === "ArrowDown" ? event.target.nextElementSibling : event.target.previousElementSibling;
+    (next || searchInput).focus();
+  }
+});
+document.querySelector(".research-search").addEventListener("keydown", event => {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    searchInput.focus();
+    searchIsOpen = false;
+    searchBody.hidden = true;
+  }
+});
+document.addEventListener("click", event => {
+  if (!event.target.closest(".research-search")) {
+    searchIsOpen = false;
+    searchBody.hidden = true;
+  }
+});
+updateSearch();
+
+function matchesFilters(node) {
+  const owner = node.kind === "researcher" ? node.id : node.owner;
+  return !owner || matchingResearcherIds.has(owner);
 }
 
 function tick(now) {
@@ -536,7 +844,8 @@ function tick(now) {
 function simulate(delta) {
   const activeId = activeResearcher();
   updateRootPosition(delta);
-  const visibleNodes = nodes.filter((node) => nodeOpacity(node, activeId) > 0.03);
+  // Filtering changes emphasis, not the physical layout of the ecosystem.
+  const visibleNodes = nodes.filter((node) => baseNodeOpacity(node, activeId) > 0.03);
 
   visibleNodes.forEach((node) => {
     if (node.id === "nbri") {
@@ -566,7 +875,7 @@ function simulate(delta) {
   }
 
   links.forEach((link) => {
-    if (link.preview || link.detail || linkOpacity(link, activeId) <= 0.03) {
+    if (link.preview || link.detail || baseLinkOpacity(link, activeId) <= 0.03) {
       return;
     }
 
@@ -600,23 +909,18 @@ function simulate(delta) {
       return;
     }
 
+    // Keep disappearing detail nodes in place throughout their opacity fade.
+    if (baseNodeOpacity(node, activeId) <= 0.03) {
+      node.vx = 0;
+      node.vy = 0;
+      return;
+    }
+
     if (node.owner) {
       const manualPosition = manualDetailPositions.get(node.id);
       if (node.detail && manualPosition) {
         node.x = manualPosition.x;
         node.y = manualPosition.y;
-        node.vx = 0;
-        node.vy = 0;
-        return;
-      }
-
-      const lockedLabPosition =
-        node.kind === "lab" && node.owner === hoveredResearcher
-          ? lockedHoverLabPositions.get(node.id)
-          : null;
-      if (lockedLabPosition) {
-        node.x = lockedLabPosition.x;
-        node.y = lockedLabPosition.y;
         node.vx = 0;
         node.vy = 0;
         return;
@@ -1027,7 +1331,17 @@ function searchOpenCanvasPosition(node, anchor, occupied, occupiedLinks) {
     return detailPositionIsClear(node, position, box, occupied, occupiedLinks);
   });
 
-  return openCandidate?.position || fitNodeInsideGraph(node, anchor);
+  if (openCandidate) return openCandidate.position;
+  const textSafeCandidate = candidates.find(({ position }) =>
+    !occupied.some(other => boxesOverlap(worldLayoutBox(node, position), other, 18)));
+  if (textSafeCandidate) return textSafeCandidate.position;
+  // Dense-data fallback: add canvas space instead of returning an overlapping anchor.
+  const box = localLayoutBox(node);
+  const position = { x: width + 32 - box.x, y: 80 - box.y };
+  width += box.width + 80;
+  userRootOverride = true;
+  applyGraphZoom(graphZoom);
+  return position;
 }
 
 function layoutLinkSegments(activeId, ignoredTargets = new Set()) {
@@ -1166,10 +1480,25 @@ function localLayoutBox(node) {
   return padBox(unionBox(shapeBox, textBox), 6);
 }
 
+function updateNodeHitArea(node) {
+  if (!node.hitArea) return;
+  // One continuous target covers the icon, every label line and surrounding space.
+  // Measure after fonts load; keep the interaction padding out of the graph layout.
+  const box = padBox(localLayoutBox(node), 4);
+  const targetWidth = Math.max(44, box.width);
+  const targetHeight = Math.max(44, box.height);
+  node.hitArea.setAttribute("x", box.x - (targetWidth - box.width) / 2);
+  node.hitArea.setAttribute("y", box.y - (targetHeight - box.height) / 2);
+  node.hitArea.setAttribute("width", targetWidth);
+  node.hitArea.setAttribute("height", targetHeight);
+}
+
 function safeTextBox(node) {
   try {
+    if (node.measuredTextBox) return node.measuredTextBox;
     const box = node.text.getBBox();
-    return box.width || box.height ? box : null;
+    if (box.width || box.height) node.measuredTextBox = { x: box.x, y: box.y, width: box.width, height: box.height };
+    return node.measuredTextBox || null;
   } catch {
     return null;
   }
@@ -1332,7 +1661,8 @@ function overlapsBaseNode(point, node, activeId) {
       return false;
     }
 
-    if (nodeOpacity(other, activeId) <= 0.12) {
+    // Filtering must not move overview lab labels or change the reset bounds.
+    if (baseNodeOpacity(other, activeId) <= 0.12) {
       return false;
     }
 
@@ -1374,7 +1704,7 @@ function avoidBaseLinkContacts(visibleNodes, activeId, delta) {
       if (
         link.preview ||
         link.detail ||
-        linkOpacity(link, activeId) <= 0.03 ||
+        baseLinkOpacity(link, activeId) <= 0.03 ||
         link.source === node.id ||
         link.target === node.id
       ) {
@@ -1451,8 +1781,10 @@ function render() {
     link.element.setAttribute("y2", link.targetNode.y);
     link.element.setAttribute("stroke-opacity", opacity);
     link.element.setAttribute("stroke-width", linkWidth(link, activeId));
-    const labelOpacity = edgeLabelOpacity(link, activeId, opacity);
+    let labelOpacity = edgeLabelOpacity(link, activeId, opacity);
     const labelPoint = edgeLabelPoint(link);
+    if (labelOpacity > 0 && edgeLabelOccupied.some(box =>
+      boxesOverlap(edgeLabelBox(link, labelPoint), box, 6))) labelOpacity = 0;
     link.labelElement.setAttribute("x", labelPoint.x);
     link.labelElement.setAttribute("y", labelPoint.y);
     link.labelElement.setAttribute("transform", `rotate(${labelPoint.angle} ${labelPoint.x} ${labelPoint.y})`);
@@ -1469,10 +1801,11 @@ function render() {
 
     node.element.setAttribute("transform", `translate(${node.x} ${node.y})`);
     node.element.style.opacity = opacity;
-    const detailIsInteractive =
-      (!node.detail && node.kind !== "preview") || node.owner === pinnedResearcher;
-    node.element.style.pointerEvents =
-      opacity > 0.12 && detailIsInteractive ? "auto" : "none";
+    const detailIsInteractive = !node.detail || node.owner === pinnedResearcher;
+    const interactive = opacity > 0.12 && detailIsInteractive;
+    node.element.style.pointerEvents = interactive ? "auto" : "none";
+    node.element.setAttribute("tabindex", interactive && node.kind === "researcher" ? "0" : "-1");
+    node.element.setAttribute("aria-hidden", String(!interactive));
     node.element.classList.toggle("active", Boolean(activeId && onFocusPath));
     node.element.classList.toggle(
       "dimmed",
@@ -1574,6 +1907,10 @@ function edgeLabelOpacity(link, activeId, linkOpacityValue) {
 }
 
 function nodeOpacity(node, activeId) {
+  return baseNodeOpacity(node, activeId) * (matchesFilters(node) ? 1 : 0.1);
+}
+
+function baseNodeOpacity(node, activeId) {
   if (node.detail) {
     return node.owner === activeId ? 1 : 0;
   }
@@ -1586,6 +1923,10 @@ function nodeOpacity(node, activeId) {
 }
 
 function linkOpacity(link, activeId) {
+  return baseLinkOpacity(link, activeId) * (matchesFilters(link.sourceNode) && matchesFilters(link.targetNode) ? 1 : 0.1);
+}
+
+function baseLinkOpacity(link, activeId) {
   if (link.detail) {
     return link.owner === activeId ? 0.94 : 0;
   }
@@ -1634,8 +1975,8 @@ function linkInFocusSubtree(link, activeId) {
 function svgPoint(event) {
   const bounds = svg.getBoundingClientRect();
   return {
-    x: event.clientX - bounds.left,
-    y: event.clientY - bounds.top,
+    x: cameraX + (event.clientX - bounds.left) / graphZoom,
+    y: cameraY + (event.clientY - bounds.top) / graphZoom,
   };
 }
 

@@ -1,5 +1,13 @@
 // Edit graph content here. graph.js and styles.css handle behavior and visuals.
-// Node info supports name, hebrewName, affiliation, and website for the info panel.
+// Node info supports name, title, affiliation, and website for type-specific cards.
+// Members show name + title only: e.g. "Master's Student", "PhD Student",
+// "Postdoctoral Researcher". Demo members currently use "PhD Student".
+// Collaborators use title + linked company/university (or info.affiliation).
+// Labs use their owner as Principal Investigator; organizations show type + website.
+// University info.faculty is shown under its name; use "Faculty of XX" as a placeholder.
+// Researcher info: title, researchTopics (visible), researchDomains (search only),
+// linkedin, scholar, website and optional email. Blank fields use demo placeholders.
+// Research domain assignments below are demonstration tags, not verified classifications.
 window.nbriGraphData = {
   nodes: [
     {
@@ -23,7 +31,17 @@ window.nbriGraphData = {
       kind: "researcher",
       radius: 54,
       angle: -2.75,
-      info: { name: "Rafael Sacks", hebrewName: "", website: "https://sacks.net.technion.ac.il/research/" },
+      info: {
+        name: "Rafael Sacks",
+        hebrewName: "",
+        title: "Professor",
+        researchTopics: ["BIM \u2013 Building Information Modeling.", "Lean Construction."],
+        researchDomains: ["Construction Management", "Research Domain 2"],
+        website: "https://sacks.net.technion.ac.il/",
+        linkedin: "https://www.linkedin.com/in/rafaelsacks/",
+        scholar: "https://scholar.google.com/citations?user=nE3CkdQAAAAJ&hl=en",
+        email: "cvsacks@technion.ac.il",
+      },
     },
     {
       id: "huaquan",
@@ -32,7 +50,17 @@ window.nbriGraphData = {
       kind: "researcher",
       radius: 54,
       angle: -1.9,
-      info: { name: "Dr. Huaquan Ying", hebrewName: "", website: "https://scholar.google.com/citations?user=RLjm8pgAAAAJ&hl=en" },
+      info: {
+        name: "Huaquan Ying",
+        hebrewName: "",
+        title: "Assistant Professor",
+        researchTopics: ["Integration of AI into BIM", "Representation learning for BIM", "Robot-enabled digital twin systems", "Digitalization of building and infrastructure"],
+        researchDomains: ["Construction Management", "Research Domain 3"],
+        website: "https://arc-lab-ying.github.io/ARC_Website/",
+        linkedin: "https://www.linkedin.com/in/huaquan-ying-92b3191a0/",
+        scholar: "https://scholar.google.com/citations?user=RLjm8pgAAAAJ&hl=en",
+        email: "huaquan.ying@technion.ac.il",
+      },
     },
     {
       id: "tanya",
@@ -41,7 +69,15 @@ window.nbriGraphData = {
       kind: "researcher",
       radius: 49,
       angle: -0.98,
-      info: { name: "Tanya", hebrewName: "", website: "" },
+      info: {
+        name: "Tanya", hebrewName: "", website: "",
+        title: "",
+        researchTopics: [],
+        researchDomains: ["Construction Management", "Research Domain 2"],
+        linkedin: "",
+        scholar: "",
+        email: "",
+      },
     },
     {
       id: "researcher4",
@@ -50,7 +86,15 @@ window.nbriGraphData = {
       kind: "researcher",
       radius: 49,
       angle: 0.1,
-      info: { name: "Dr. Yiska Goldfeld", hebrewName: "", website: "" },
+      info: {
+        name: "Dr. Yiska Goldfeld", hebrewName: "", website: "",
+        title: "",
+        researchTopics: [],
+        researchDomains: ["Research Domain 2"],
+        linkedin: "",
+        scholar: "",
+        email: "",
+      },
     },
     {
       id: "researcher5",
@@ -59,7 +103,15 @@ window.nbriGraphData = {
       kind: "researcher",
       radius: 49,
       angle: 1.05,
-      info: { name: "Nicolò Pollini", hebrewName: "", website: "" },
+      info: {
+        name: "Nicolò Pollini", hebrewName: "", website: "",
+        title: "",
+        researchTopics: [],
+        researchDomains: ["Research Domain 2", "Research Domain 3"],
+        linkedin: "",
+        scholar: "",
+        email: "",
+      },
     },
     {
       id: "researcher6",
@@ -68,7 +120,15 @@ window.nbriGraphData = {
       kind: "researcher",
       radius: 49,
       angle: 2.05,
-      info: { name: "Dr. Semion Zhutovsky", hebrewName: "", website: "" },
+      info: {
+        name: "Dr. Semion Zhutovsky", hebrewName: "", website: "",
+        title: "",
+        researchTopics: [],
+        researchDomains: ["Research Domain 3"],
+        linkedin: "",
+        scholar: "",
+        email: "",
+      },
     },
 
     {
@@ -97,7 +157,7 @@ window.nbriGraphData = {
       detail: true,
       branchDistance: 182,
       spread: -118,
-      info: { name: "Lab Member 1", hebrewName: "", website: "" },
+      info: { name: "Lab Member 1", title: "PhD Student", hebrewName: "", website: "" },
     },
     {
       id: "rafael-member-2",
@@ -108,7 +168,7 @@ window.nbriGraphData = {
       detail: true,
       branchDistance: 236,
       spread: 0,
-      info: { name: "Lab Member 2", hebrewName: "", website: "" },
+      info: { name: "Lab Member 2", title: "PhD Student", hebrewName: "", website: "" },
     },
     {
       id: "rafael-member-3",
@@ -119,7 +179,7 @@ window.nbriGraphData = {
       detail: true,
       branchDistance: 204,
       spread: 118,
-      info: { name: "Lab Member 3", hebrewName: "", website: "" },
+      info: { name: "Lab Member 3", title: "PhD Student", hebrewName: "", website: "" },
     },
     {
       id: "rafael-collaborator",
@@ -169,7 +229,7 @@ window.nbriGraphData = {
       detail: true,
       branchDistance: 182,
       spread: -118,
-      info: { name: "Zheng Zhao", hebrewName: "xxx", website: "xxx" },
+      info: { name: "Zheng Zhao", title: "PhD Student", hebrewName: "xxx", website: "xxx" },
     },
     {
       id: "huaquan-member-2",
@@ -180,7 +240,7 @@ window.nbriGraphData = {
       detail: true,
       branchDistance: 236,
       spread: 0,
-      info: { name: "Zikang Wang", hebrewName: "xxx", website: "" },
+      info: { name: "Zikang Wang", title: "PhD Student", hebrewName: "xxx", website: "" },
     },
     {
       id: "huaquan-collaborator",
@@ -230,7 +290,7 @@ window.nbriGraphData = {
       detail: true,
       branchDistance: 182,
       spread: -118,
-      info: { name: "Lab Member 1", hebrewName: "", website: "" },
+      info: { name: "Lab Member 1", title: "PhD Student", hebrewName: "", website: "" },
     },
     {
       id: "tanya-member-2",
@@ -241,7 +301,7 @@ window.nbriGraphData = {
       detail: true,
       branchDistance: 236,
       spread: 0,
-      info: { name: "Lab Member 2", hebrewName: "", website: "" },
+      info: { name: "Lab Member 2", title: "PhD Student", hebrewName: "", website: "" },
     },
     {
       id: "tanya-member-3",
@@ -252,7 +312,7 @@ window.nbriGraphData = {
       detail: true,
       branchDistance: 204,
       spread: 118,
-      info: { name: "Lab Member 3", hebrewName: "", website: "" },
+      info: { name: "Lab Member 3", title: "PhD Student", hebrewName: "", website: "" },
     },
     {
       id: "tanya-collaborator",
@@ -302,7 +362,7 @@ window.nbriGraphData = {
       detail: true,
       branchDistance: 182,
       spread: -118,
-      info: { name: "Lab Member 1", hebrewName: "", website: "" },
+      info: { name: "Lab Member 1", title: "PhD Student", hebrewName: "", website: "" },
     },
     {
       id: "researcher4-member-2",
@@ -313,7 +373,7 @@ window.nbriGraphData = {
       detail: true,
       branchDistance: 236,
       spread: 0,
-      info: { name: "Lab Member 2", hebrewName: "", website: "" },
+      info: { name: "Lab Member 2", title: "PhD Student", hebrewName: "", website: "" },
     },
     {
       id: "researcher4-member-3",
@@ -324,7 +384,7 @@ window.nbriGraphData = {
       detail: true,
       branchDistance: 204,
       spread: 118,
-      info: { name: "Lab Member 3", hebrewName: "", website: "" },
+      info: { name: "Lab Member 3", title: "PhD Student", hebrewName: "", website: "" },
     },
     {
       id: "researcher4-collaborator",
@@ -374,7 +434,7 @@ window.nbriGraphData = {
       detail: true,
       branchDistance: 182,
       spread: -118,
-      info: { name: "Lab Member 1", hebrewName: "", website: "" },
+      info: { name: "Lab Member 1", title: "PhD Student", hebrewName: "", website: "" },
     },
     {
       id: "researcher5-member-2",
@@ -385,7 +445,7 @@ window.nbriGraphData = {
       detail: true,
       branchDistance: 236,
       spread: 0,
-      info: { name: "Lab Member 2", hebrewName: "", website: "" },
+      info: { name: "Lab Member 2", title: "PhD Student", hebrewName: "", website: "" },
     },
     {
       id: "researcher5-member-3",
@@ -396,7 +456,7 @@ window.nbriGraphData = {
       detail: true,
       branchDistance: 204,
       spread: 118,
-      info: { name: "Lab Member 3", hebrewName: "", website: "" },
+      info: { name: "Lab Member 3", title: "PhD Student", hebrewName: "", website: "" },
     },
     {
       id: "researcher5-collaborator",
@@ -446,7 +506,7 @@ window.nbriGraphData = {
       detail: true,
       branchDistance: 182,
       spread: -118,
-      info: { name: "Lab Member 1", hebrewName: "", website: "" },
+      info: { name: "Lab Member 1", title: "PhD Student", hebrewName: "", website: "" },
     },
     {
       id: "researcher6-member-2",
@@ -457,7 +517,7 @@ window.nbriGraphData = {
       detail: true,
       branchDistance: 236,
       spread: 0,
-      info: { name: "Lab Member 2", hebrewName: "", website: "" },
+      info: { name: "Lab Member 2", title: "PhD Student", hebrewName: "", website: "" },
     },
     {
       id: "researcher6-member-3",
@@ -468,7 +528,7 @@ window.nbriGraphData = {
       detail: true,
       branchDistance: 204,
       spread: 118,
-      info: { name: "Lab Member 3", hebrewName: "", website: "" },
+      info: { name: "Lab Member 3", title: "PhD Student", hebrewName: "", website: "" },
     },
     {
       id: "researcher6-collaborator",
@@ -641,7 +701,7 @@ addedCollaboratorBranches.forEach((branch) => {
       owner: branch.owner,
       detail: true,
       branchDistance: 172,
-      info: { name: branch.universityName, hebrewName: "", website: "" },
+      info: { name: branch.universityName, faculty: "Faculty of XX", hebrewName: "", website: "" },
     },
   );
 
