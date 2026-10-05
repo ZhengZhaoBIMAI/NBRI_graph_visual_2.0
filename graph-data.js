@@ -98,7 +98,7 @@ window.nbriGraphData = {
     },
     {
       id: "researcher5",
-      label: "Nicolò\nPollini",
+      label: "Dr. Nicolò\nPollini",
       role: "Researcher",
       kind: "researcher",
       radius: 49,

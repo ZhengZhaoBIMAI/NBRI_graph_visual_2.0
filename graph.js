@@ -732,6 +732,7 @@ const searchPanel = document.querySelector(".research-search");
 const searchContent = document.querySelector("#search-content");
 const profileCard = document.querySelector(".node-info");
 const searchInput = document.querySelector("#research-search");
+const clearNameSearch = document.querySelector("#clear-name-search");
 const searchResults = document.querySelector("#search-results");
 const searchStatus = document.querySelector("#search-status");
 const searchBody = document.querySelector("#search-body");
@@ -798,6 +799,7 @@ domains.forEach(domain => {
 });
 
 function updateSearch() {
+  clearNameSearch.hidden = !searchInput.value.length;
   const query = normalizeSearch(searchInput.value.trim());
   const matches = researchers.filter(node => {
     const name = [node.label, node.info?.name].join(" ").replaceAll("\n", " ");
@@ -853,6 +855,11 @@ searchInput.addEventListener("input", () => {
   updateSearch();
 });
 searchInput.addEventListener("focus", () => { searchIsOpen = true; updateSearch(); });
+clearNameSearch.addEventListener("click", () => {
+  searchInput.value = "";
+  searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+  searchInput.focus();
+});
 document.querySelector("#clear-filters").addEventListener("click", () => {
   selectedDomains.clear();
   domainOptions.querySelectorAll("input").forEach(input => { input.checked = false; });
