@@ -111,7 +111,9 @@ window.renderNbriProfile = function (node, graphNodes = window.nbriGraphData.nod
     social.hidden = !social.childElementCount;
   }
   if (template.topics) {
-    const topics = Array.isArray(info.researchTopics) ? info.researchTopics.map(clean).filter(Boolean) : [];
+    const topics = Array.isArray(info.researchTopics)
+      ? info.researchTopics.map(topic => clean(topic).replace(/[.\u3002]+$/, "").trim()).filter(Boolean)
+      : [];
     const topicList = document.createElement("ul");
     topicList.className = "profile-topics";
     (topics.length ? topics : ["Research Topic 1", "Research Topic 2", "Research Topic 3"]).forEach(topic => {

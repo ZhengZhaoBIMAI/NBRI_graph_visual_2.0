@@ -35,7 +35,7 @@ window.nbriGraphData = {
         name: "Rafael Sacks",
         hebrewName: "",
         title: "Professor",
-        researchTopics: ["BIM \u2013 Building Information Modeling.", "Lean Construction."],
+        researchTopics: ["BIM \u2013 Building Information Modeling", "Lean Construction"],
         researchDomains: ["Construction Management", "Research Domain 2"],
         website: "https://sacks.net.technion.ac.il/",
         linkedin: "https://www.linkedin.com/in/rafaelsacks/",
