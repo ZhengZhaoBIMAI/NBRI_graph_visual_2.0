@@ -701,6 +701,7 @@ function resetProfile({ restoreOverview = false } = {}) {
     svg.classList.add("is-resetting");
     searchIsOpen = false;
     searchBody.hidden = true;
+    setDomainFilterOpen(false);
     userRootOverride = false;
     Object.assign(nodeById.get("nbri"), defaultRootTarget());
     nodes.forEach(node => { node.vx = 0; node.vy = 0; });
@@ -731,6 +732,8 @@ const searchResults = document.querySelector("#search-results");
 const searchStatus = document.querySelector("#search-status");
 const searchBody = document.querySelector("#search-body");
 const domainOptions = document.querySelector("#domain-options");
+const domainFilterToggle = document.querySelector("#domain-filter-toggle");
+const domainFilterCount = document.querySelector("#domain-filter-count");
 const selectedDomains = new Set();
 const researchers = nodes.filter(node => node.kind === "researcher");
 let matchingResearcherIds = new Set(researchers.map(node => node.id));
@@ -739,6 +742,16 @@ const normalizeSearch = value => value.normalize("NFD").replace(/[\u0300-\u036f]
 const researchDomains = node => Array.isArray(node.info?.researchDomains)
   ? node.info.researchDomains.filter(domain => typeof domain === "string" && domain.trim()).map(domain => domain.trim()) : [];
 const domains = [...new Set(researchers.flatMap(researchDomains))].sort();
+
+function setDomainFilterOpen(open) {
+  domainFilterToggle.setAttribute("aria-expanded", String(open));
+  domainOptions.hidden = !open;
+}
+
+domainFilterToggle.addEventListener("click", () => {
+  setDomainFilterOpen(domainFilterToggle.getAttribute("aria-expanded") !== "true");
+});
+
 domains.forEach(domain => {
   const label = document.createElement("label");
   label.className = "domain-option";
@@ -768,6 +781,10 @@ function updateSearch() {
   if (pinnedResearcher && !matchingResearcherIds.has(pinnedResearcher)) resetProfile();
   const active = Boolean(query || selectedDomains.size);
   document.querySelector("#clear-filters").hidden = !active;
+  domainFilterCount.hidden = !selectedDomains.size;
+  domainFilterCount.textContent = String(selectedDomains.size);
+  domainFilterToggle.setAttribute("aria-label", "Filter by Research Domain" +
+    (selectedDomains.size ? ", " + selectedDomains.size + " selected" : ""));
   searchStatus.textContent = matches.length ? "" : "No matches. Try another name or clear filters.";
   searchStatus.hidden = Boolean(matches.length);
   searchBody.hidden = !searchIsOpen || !active;
@@ -782,6 +799,7 @@ function updateSearch() {
       searchInput.focus();
       searchIsOpen = false;
       searchBody.hidden = true;
+      setDomainFilterOpen(false);
       selectProfileNode(node);
     });
     searchResults.append(button);
@@ -815,7 +833,10 @@ searchResults.addEventListener("keydown", event => {
 document.querySelector(".research-search").addEventListener("keydown", event => {
   if (event.key === "Escape") {
     event.preventDefault();
-    searchInput.focus();
+    if (domainFilterToggle.getAttribute("aria-expanded") === "true") {
+      setDomainFilterOpen(false);
+      domainFilterToggle.focus();
+    } else searchInput.focus();
     searchIsOpen = false;
     searchBody.hidden = true;
   }

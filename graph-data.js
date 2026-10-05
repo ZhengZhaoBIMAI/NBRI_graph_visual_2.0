@@ -266,20 +266,20 @@ window.nbriGraphData = {
 
     {
       id: "tanya-preview",
-      label: "Automation\nLab",
+      label: "Data Centric Design and Construction Lab",
       kind: "preview",
       radius: 30,
       owner: "tanya",
-      info: { name: "Automation Lab", hebrewName: "", website: "" },
+      info: { name: "Data Centric Design and Construction Lab", hebrewName: "", website: "https://dcsquared.twix.technion.ac.il/" },
     },
     {
       id: "tanya-lab",
-      label: "Data Centric\nDesign and\nConstruction\nLab",
+      label: "Data Centric Design and Construction Lab",
       kind: "lab",
       radius: 48,
       owner: "tanya",
       detail: true,
-      info: { name: "Automation Lab", hebrewName: "", website: "" },
+      info: { name: "Data Centric Design and Construction Lab", hebrewName: "", website: "https://dcsquared.twix.technion.ac.il/" },
     },
     {
       id: "tanya-member-1",

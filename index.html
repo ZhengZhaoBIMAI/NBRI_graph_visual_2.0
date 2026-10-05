@@ -25,7 +25,13 @@
           </div>
         </div>
         <div id="filter-panel">
-          <fieldset id="domain-options"><legend class="panel-subheading">Research Domain</legend></fieldset>
+          <button id="domain-filter-toggle" type="button" aria-expanded="false" aria-controls="domain-options">
+            <svg class="filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 4h18l-7 8v7l-4 2V12Z"/></svg>
+            <span class="filter-label">Filter by Research Domain</span>
+            <span id="domain-filter-count" hidden></span>
+            <svg class="filter-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          <fieldset id="domain-options" hidden><legend class="visually-hidden">Research Domain</legend></fieldset>
           <button id="clear-filters" type="button" hidden>Clear Filters</button>
         </div>
         <div id="search-body" hidden>
